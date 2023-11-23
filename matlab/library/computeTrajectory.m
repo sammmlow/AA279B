@@ -52,7 +52,7 @@ OUTPUTS:
         % Arrival and departure velocities:
         tof = seconds(dates(i+1) - dates(i));
         [vdep_hci, varr_hci, ~] = lambert( gravParams('Su') , ...
-            p1_eph(1:3), p1_eph(1:3), 'pro', tof);
+            p1_eph(1:3), p2_eph(1:3), 'pro', tof);
         
         % Add to output:
         PositionVelocity(i,:) = ...

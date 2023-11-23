@@ -21,7 +21,7 @@ function mu = gravParams(body)
     values = [22031.868551, 324858.592000, 398600.435507, 42828.375816, ...
               126712764.100000, 37940584.841800, 5794556.400000,...
               6836527.100580, 1.3271244004193938e11];
-    d  = dictionary(keys,values);
+    d  = containers.Map(keys,values);
     mu = d(body);
 
 end

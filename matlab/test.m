@@ -1,5 +1,8 @@
 %% Generate Porkchop Plot Arrays:
 
+% test script to see if I can generate an unpowered interplanetary
+% trajectory for Earth-Jupiter-Saturn
+
 % Constant
 jdOffset = 1721058.5;
 
@@ -89,9 +92,48 @@ end
 
 %% Plot trajectory:
 
+AU      = 149597870.7;
+muSun   = 1.3271244004193938e11;
+options = odeset('RelTol', 1e-6, 'AbsTol', 1e-9);
+tstep   = 3600; % Seconds per hour
 
+% Earth   -> Jupiter
+tspanEJ        = 0 : tstep : tofEJ; % simulate once an hour
+[vdep_E, ~, ~] = AA279lambert_curtis(muSun, rE(1:3), rJ(1:3), 'pro', 1, tofEJ);
+initialEJ      = [rE(1:3); vdep_E];
+[~,State_EJ]   = ode113(@(t,State) Propogate2Body(State, muSun),...
+                     tspanEJ, initialEJ, options);
+% Jupiter -> Saturn
+tspanJS      = 0 : tstep : tofJS; % simulate once an hour
+[vdep_J, ~, ~] = AA279lambert_curtis(muSun, rJ(1:3), rS(1:3), 'pro', 1, tofJS);
+initialJS    = [rJ(1:3); vdep_J];
+[~,State_JS] = ode113(@(t,State) Propogate2Body(State, muSun),...
+                     tspanJS, initialJS, options);
 
-
+figure()
+% Orbital Radii
+centers = zeros(3,2);
+radii   = [1; 5.2; 9.5];
+viscircles(centers,radii,'color','black','LineWidth',1.5);
+hold on;
+% Planet Positions
+scatter(rE(2)/AU, rE(1)/AU, 100, 'filled')
+text(rE(2)/AU -1, rE(1)/AU +1, string(datestr(eJD - jdOffset)))
+scatter(rJ(2)/AU, rJ(1)/AU, 100, 'filled')
+text(rJ(2)/AU -1, rJ(1)/AU +1, string(datestr(jJD - jdOffset)))
+scatter(rS(2)/AU, rS(1)/AU, 100, 'filled')
+text(rS(2)/AU -1, rS(1)/AU +1, string(datestr(sJD - jdOffset)))
+% Trajectory
+plot(State_EJ(:,2)/AU,State_EJ(:,1)/AU,'r-','LineWidth',2)
+plot(State_JS(:,2)/AU,State_JS(:,1)/AU,'r-','LineWidth',2)
+xlabel('Y [AU]')
+ylabel('X [AU]')
+title('Trajectory from Earth to Saturn with Unpowered Jupiter Flyby')
+legend('Earth','Jupiter','Saturn')
+axis equal;
+grid on;
+set(gca, 'XDir', 'reverse')
+hold off;
 
 
 

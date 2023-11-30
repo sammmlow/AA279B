@@ -32,9 +32,9 @@ switch body
     case {'M'}       % Mars
         ID = 4; GM_PLANET = 4.28283e4;
     case {'J'}       % Jupiter
-        ID = 5; GM_PLANET = 1.26686534e10;
+        ID = 5; GM_PLANET = 1.26686534e8;
     case {'S', 'T'}  % Saturn or Titan
-        ID = 6; GM_PLANET = 3.7931187e9;
+        ID = 6; GM_PLANET = 3.7931187e7;
     case {'U'}       % Uranus
         ID = 7; GM_PLANET = 5.793939e8;
     case {'N'}       % Neptune

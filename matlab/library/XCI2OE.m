@@ -15,11 +15,13 @@ function oe = XCI2OE(XCI, MU)
 %        w - argument of periapsis (radians)
 %        va - true anomaly (radians)
 
+% NOTE THAT THIS FUNCTION HAS BEEN MODIFIED TO OUTPUT HYPERBOLIC PARAMS
+
 % Tolerance for integer rounding for e and i
 eps = 1E-5;
 
 % Check for valid inputs
-if size(XCI, 1) == 6 && size(XCI, 2) == 6 && MU > 0
+if size(XCI, 1) == 6 && size(XCI, 2) == 1 && MU > 0
 
     % Size output
     oe = zeros(6,1);
@@ -34,11 +36,22 @@ if size(XCI, 1) == 6 && size(XCI, 2) == 6 && MU > 0
     h = norm(hv);
     nv = cross([0 0 1], hv);
     n = norm(nv);
+
+    % Compute inclination
+    i = acos(hv(3) / h); % Returns values in interval [0,pi]
+    i = wrapToPi(i);
+    if i < eps
+        i = 0;
+    elseif abs(i - pi) < eps
+        i = pi;
+    end
+
     % Eccentricity vector
     ev = ((v^2 - MU / r) * reci - dot(reci, veci) * veci) / MU;
     
     % Compute eccentricity
     e = norm(ev);
+
     % Check for valid value
     if (e < 1)
     
@@ -56,15 +69,6 @@ if size(XCI, 1) == 6 && size(XCI, 2) == 6 && MU > 0
             a = -MU / (2 * sme);
         else
             a = inf;
-        end
-
-        % Compute inclination
-        i = acos(hv(3) / h);
-        i = wrapToPi(i);
-        if i < eps
-            i = 0;
-        elseif abs(i - pi) < eps
-            i = pi;
         end
 
         % Compute RAAN, argument of periapsis, and mean anomaly
@@ -132,8 +136,13 @@ if size(XCI, 1) == 6 && size(XCI, 2) == 6 && MU > 0
         oe(5) = w;
         oe(6) = va;
     else
-        oe(:) = nan(6,1);
-        disp('Invalid inputs to XCI2OE');
+        oe(1) = r; % This is technically wrong, but just hack it
+        oe(2) = e;
+        oe(3) = i;
+        oe(4) = nan;
+        oe(5) = nan;
+        oe(6) = nan;
+        % disp('Warning! Hyperbolic eccentricity detected!');
     end
 
 else

@@ -1,4 +1,4 @@
-function flybyDates = findFlybyDates(departureIdx, arrivalIdx, depSwingby, swingbyArr, tol)
+function flybyDateIdxs = findFlybyDates(departureIdx, arrivalIdx, depSwingby, swingbyArr, tol)
 
     %{
         Inputs:
@@ -13,18 +13,21 @@ function flybyDates = findFlybyDates(departureIdx, arrivalIdx, depSwingby, swing
             tol  - tolerance for difference between departure and arrival
             velocity
 
+        Outputs:
+            Indices of the swingby dates
+
     %}
 
         jupArrival   = depSwingby(departureIdx,:);
         jupDeparture = swingbyArr(:,arrivalIdx)';
 
-        flybyDates = [];
+        flybyDateIdxs = [];
 
         for i = 1:length(jupArrival)
 
             if abs(jupArrival(i) - jupDeparture(i)) <= tol
 
-                flybyDates(end + 1) = i;
+                flybyDateIdxs(end + 1) = i;
                 
             end
 

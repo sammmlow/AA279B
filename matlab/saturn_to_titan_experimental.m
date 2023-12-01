@@ -74,11 +74,17 @@ x0_hci_test = syn2hci6 * (x0_syn - [R1;0;0;0;0;0]) + eph_saturn;
 
 %% Now, lets define a conversion from HCI to Titan-Centered Inertial
 % tilt = Saturn's inclination + Titan's inclination + Titan's tilt
+
 tilt = 2.486 + 26.73 + 0.34854; 
+
 hci2tci = [1.0         0.0        0.0 ;
            0.0  cosd(tilt) sind(tilt) ;
            0.0 -sind(tilt) cosd(tilt) ];
+
 hci2tci6 = [ hci2tci zeros(3,3) ; zeros(3,3) hci2tci ];
+
+tci2hci = transpose(hci2tci);
+tci2hci6 = transpose(hci2tci6);
 
 %% Generate the plot object in the Synodic reference frame
 figure(1);
@@ -88,23 +94,37 @@ plot_body( 'S', RAD_SATURN, [R1 0 0] );
 hold on; grid on;   
 plot_body( 'T', RAD_TITAN,  [R2 0 0] );
 
-%% Stage 1: CR3BP shooting method - go for near Titan Center
+%% Stage 1: CR3BP shooting method - go for a position in Titan orbit
 
 iter = 1;
-maxIters = 60;
-maxIters2 = 3 * maxIters;
+maxIters = 20;
+maxIters2 = 2 * maxIters;
 tstep = 600; % [sec]
 error = Inf;
 x0_iter = x0_syn;
-tolerance = 100.0;
+tolerance = 10.0;
 perturbation = 0.001; % [km/s]
 options = odeset('RelTol', 1e-6, 'AbsTol', 1e-9);
 colormaps = turbo(maxIters2);
 
-target = [ (R2 + RAD_TITAN) ; (RAD_TITAN) ; 0];
+% Initialize a set of Titan-centric osculating OE. Note that in order to
+% greatly simplify the problem, we aim for a spot along Titan's equator
+zero_argp = 0.0; % So it hits only the equator
+zero_anom = 0.0; % So it hits only the equator
+desired_inc = 79.0; 
+desired_sma = 3500;
+
+target_oe = [desired_sma, 0.001, desired_inc, 0.0, zero_argp, zero_anom]';
+[target_p_tci, target_v_tci] = OE2XCI( target_oe, GM_TITAN );
+target_pv_tci = [target_p_tci ; target_v_tci];
+target_pv_syn = (hci2syn6 * tci2hci6 * target_pv_tci) + [R2;0;0;0;0;0];
+
+target_pos_syn = target_pv_syn(1:3);
+target_vel_syn = target_pv_syn(4:6);
 
 stage1_success = 1;
 
+%% Run the shooting method here.
 while error > tolerance
 
     % For the very first iteration, compute the Jacobian. The Jacobian
@@ -142,12 +162,8 @@ while error > tolerance
     [tf, xf_iter] = ode113( @(t,y) ...
             derivative(t, y, GM_SATURN, GM_TITAN, R1, R2), ...
             [0:tstep:tflight]', x0_iter, options);
-    target_error = xf_iter(end,1:3)' - target;
+    target_error = xf_iter(end,1:3)' - target_pos_syn;
     error = norm(target_error);
-
-%     % Plot the intermediate trajectories.
-%     plot3(xf_iter(:,1), xf_iter(:,2), xf_iter(:,3), ...
-%         'Color', [colormaps(iter,:) 0.75]);
 
     % Now apply the update to the control variables.
     initial_velocity = x0_iter(4:6);
@@ -155,7 +171,7 @@ while error > tolerance
     x0_iter(4:6) = updated_velocity; % Overwrite
     iter = iter + 1;
 
-    % DEBUG: TO REMOVE
+    % Plot only the final trajectory
     if (error < tolerance) || (iter > maxIters)
         plot3(xf_iter(:,1), xf_iter(:,2), xf_iter(:,3), ...
             'Color', [colormaps(iter,:) 0.75]);
@@ -170,151 +186,59 @@ while error > tolerance
     end
 end
 
-%% Compute the total DV expended in Stage 1
-deltaV1 = norm(x0_syn(4:6) - x0_iter(4:6));
-disp(['Total DV expended in Stage 1 = ' num2str(deltaV1)]);
+%% Arresting any excess velocity and computation of total DV expenditure
 
-%% Set x0_iter to some mid-course correction, arbitrarily set to 80% mark
-mark = 0.8;
-N = length(xf_iter(:,1));
-N_mark = round(mark * N);
-tflight2 = (1 - mark) * tflight;
-x0_iter_mark = xf_iter(N_mark,:)';
-x0_iter_mark_init = x0_iter_mark;
+% Compute the total DV expended in Stage 1
+dv1 = x0_syn(4:6) - x0_iter(4:6);
+disp(['Delta-V Stage 1 = ' num2str(norm(dv1))]);
 
-% %% Stage 2: CR3BP shooting method - now, aim for a circular orbit
-% 
-% err_r = Inf; % [km]
-% err_i = Inf; % [deg]
-% err_e = Inf; % [nil]
-% 
-% target_r = 5000; 
-% target_i = 78.5;
-% target_e = 0.0;
-% 
-% tol_r = 10;   % [km]
-% tol_i = 1.0;  % [deg]
-% tol_e = 0.1;  % [nil]
-% 
-% perturbation = perturbation / 10;
-% 
-% stage2_success = 1;
-% 
-% while (err_r > tol_r) || (err_e > tol_e) || (err_i > tol_i)
-% 
-%     % For the very first iteration, compute the Jacobian. The Jacobian
-%     % quantifies the sensitivity of the final distance and speed with 
-%     % respect to Titan, given some perturbed velocity components in XYZ.
-%     jacobian = zeros(3,3);
-%     
-%     % For each dimension of the velocity vector,
-%     for idx = 1 : 3
-% 
-%         % The component of that dimension is perturbed,
-%         perturbed_vector = [ 0 ; 0 ; 0 ; 0 ; 0 ; 0 ];
-%         perturbed_vector(idx+3) = perturbation;
-%         
-%         % One step forward,
-%         x0_forward = x0_iter_mark + perturbed_vector;
-%         [tf, xf_forward] = ode113( @(t,y) ...
-%             derivative(t, y, GM_SATURN, GM_TITAN, R1, R2), ...
-%             [0:tstep:tflight2]', x0_forward, options);
-% 
-%         % One step back...
-%         x0_backward = x0_iter_mark - perturbed_vector;
-%         [tf, xf_backward] = ode113( @(t,y) ...
-%             derivative(t, y, GM_SATURN, GM_TITAN, R1, R2), ...
-%             [0:tstep:tflight2]', x0_backward, options);
-% 
-%         % Convert Synodic to Titan-centered inertial coordinates.
-%         
-%         xf_forward_hci = syn2hci6 * (xf_forward(end,:)' - ...
-%             [R1;0;0;0;0;0]) + eph_saturn;
-%         xf_forward_tci = hci2tci6 * (xf_forward_hci - eph_titan);
-% 
-%         xf_backward_hci = syn2hci6 * (xf_backward(end,:)' - ...
-%             [R1;0;0;0;0;0]) + eph_saturn;
-%         xf_backward_tci = hci2tci6 * (xf_backward_hci - eph_titan);
-% 
-%         % Compute Jacobian with respect to distance to Titan
-%         j_dist_tci = (norm(xf_forward_tci(1:3)) - ...
-%             norm(xf_backward_tci(1:3))) / (2 * perturbation);
-%         
-%         % Compute Jacobian with respect to eccentricity about Titan
-%         oe_forward = XCI2OE( xf_forward_tci, GM_TITAN );
-%         oe_backward = XCI2OE( xf_backward_tci, GM_TITAN );
-%         e_forward = oe_forward(2);
-%         e_backward = oe_backward(2);
-%         j_eccentric = (e_forward - e_backward) / (2 * perturbation);
-% 
-%         % Compute Jacobian with respect to orbit inclination about Titan
-%         i_forward = rad2deg(oe_forward(3));
-%         i_backward = rad2deg(oe_backward(3));
-%         j_inclination = (i_forward - i_backward) / (2 * perturbation);
-% 
-%         % Populate the Jacobian
-%         jacobian(1,idx) = j_dist_tci;
-%         jacobian(2,idx) = j_inclination;
-%         jacobian(3,idx) = j_eccentric;
-%     end
-% 
-%     % Apply the shooting method update now.
-%     [tf, xf_iter] = ode113( @(t,y) ...
-%             derivative(t, y, GM_SATURN, GM_TITAN, R1, R2), ...
-%             [0:tstep:tflight2]', x0_iter_mark, options);
-% 
-%     xf_iter_hci = syn2hci6 * (xf_iter(end,:)' - ...
-%             [R1;0;0;0;0;0]) + eph_saturn;
-%     xf_iter_tci = hci2tci6 * (xf_iter_hci - eph_titan);
-% 
-%     xf_iter_dist = norm(xf_iter_tci(1:3));
-%     xf_iter_oe = XCI2OE( xf_iter_tci, GM_TITAN );
-%     xf_iter_incli = rad2deg(xf_iter_oe(3));
-%     xf_iter_eccen = xf_iter_oe(2);
-% 
-%     err_r = xf_iter_dist  - target_r;
-%     err_i = xf_iter_incli - target_i;
-%     err_e = xf_iter_eccen - target_e;
-% 
-%     if (err_e - 1 < 0.001)
-%         posDebug = xf_iter_tci(1:3);
-%         velDebug = xf_iter_tci(4:6);
-%     end
-% 
-%     target_error = [ err_r ; err_i ; err_e ];
-% 
-%     disp(['Stage 2: Error = ' num2str(target_error')]);
-% 
-%     % Artificially dampen the effect of the error
-%     target_error = target_error * 0.05;
-% 
-%     % Plot the intermediate trajectories.
-%     plot3(xf_iter(:,1), xf_iter(:,2), xf_iter(:,3), ...
-%         'Color', [colormaps(iter,:) 0.75]);
-% 
-%     % Now apply the update to the control variables.
-%     initial_velocity = x0_iter_mark(4:6);
-%     updated_velocity = initial_velocity - jacobian \ target_error;
-%     x0_iter_mark(4:6) = updated_velocity; % Overwrite
-%     iter = iter + 1;
-%     
-%     % TODO: Output a NaN if shooting method fails to provide a solution
-%     if (iter > maxIters2)
-%         stage2_success = 0;
-%         break;
-%     end
-% end
+% Arrest the excess velocity, bring it into circular orbit. First, find 
+% component of the velocity vector that is parallel to the radial vector.
 
-%% Stage 3: Check the eccentricity is less than one.
-xf_iter_end = xf_iter(end,:);
-xf_hci = syn2hci6 * (xf_iter_end' - [R1;0;0;0;0;0]) + eph_saturn;
+% Convert current synodic frame to Titan centered inertial frame
+xf_iter_tci = hci2tci6 * syn2hci6 * (xf_iter(end,:)' - [R2;0;0;0;0;0]);
+
+% Perpendicularize the velocity vector
+xf_iter_tci_rhat = xf_iter_tci(1:3) / norm(xf_iter_tci(1:3));
+xf_iter_tci_vPara = xf_iter_tci_rhat * ...
+    dot(xf_iter_tci(4:6), xf_iter_tci_rhat);
+xf_iter_tci_vPerp = xf_iter_tci(4:6) - xf_iter_tci_vPara;
+
+% Reduce its magnitude in order to achieve a circular orbit
+v_circular = sqrt(GM_TITAN / desired_sma);
+v_current = norm(xf_iter_tci_vPerp);
+xf_iter_tci_vCirc = (v_circular / v_current) * xf_iter_tci_vPerp;
+
+% Compute inclination after circularizing and perpendicularizing
+xf_iter_tci_hv = cross(xf_iter_tci(1:3), xf_iter_tci_vCirc);
+xf_iter_tci_h = norm(xf_iter_tci_hv);
+xf_iter_tci_inc = acosd( xf_iter_tci_hv(3) / xf_iter_tci_h );
+delta_inc = desired_inc - xf_iter_tci_inc;
+
+% Compute the Rodrigues rotation matrix
+rh = xf_iter_tci_rhat;
+W = [ 0 -rh(3) rh(2) ; rh(3) 0 -rh(1) ; -rh(2) rh(1) 0 ];
+rodMat1 = sind(delta_inc) *  W;
+rodMat2 = 2 * (sind(delta_inc/2)^2) *  W * W;
+rodMat3 = eye(3) + rodMat1 + rodMat2;
+
+% Rotate the circularized and perpendicularized velocity vector
+xf_iter_tci_vFinal = rodMat3 * xf_iter_tci_vCirc;
+
+% Compute the total DV needed for the Titan insertion burn.
+dv2 = xf_iter_tci_vFinal - xf_iter(end,4:6)';
+disp(['Delta-V Stage 2 = ' num2str(norm(dv2))]);
+
+% Initialize the insertion state of the satellite
+x0_insert = [ xf_iter(end,1:3)' ; xf_iter(end,4:6)' + dv2 ];
+
+% Compute eccentricity. If e > 1, reject this solution (shouldn't happen)
+xf_hci = syn2hci6 * (x0_insert - [R1;0;0;0;0;0]) + eph_saturn;
 xf_tci = hci2tci6 * (xf_hci - eph_titan);
 xf_tci_r = norm(xf_tci(1:3));
 xf_tci_v = norm(xf_tci(4:6));
 ev = ((xf_tci_v^2 - GM_TITAN / xf_tci_r) * xf_tci(1:3) - ...
     dot( xf_tci(1:3), xf_tci(4:6) ) * xf_tci(4:6)) / GM_TITAN;
-    
-% Compute eccentricity
 e = norm(ev);
 disp(['Eccentricity at arrival to Titan = ' num2str(e)]);
 
@@ -322,17 +246,26 @@ if (e > 1)
     stage2_success = 0;
 end
 
-%% Compute the Delta-V use of Stage 2
-deltaV2 = norm(x0_iter_mark_init(4:6) - x0_iter_mark(4:6));
-disp(['Total DV expended in Stage 2 = ' num2str(deltaV2)]);
+%% Engage in aero-braking
+    
+[tf, xf_insert] = ode113( @(t,y) ...
+    derivative(t, y, GM_SATURN, GM_TITAN, R1, R2), ...
+    [0:60:18000]', x0_insert, options);
+
+plot3(xf_insert(:,1), xf_insert(:,2), xf_insert(:,3), ...
+    'Color', [colormaps(iter,:) 0.75]);
+
+% %% Compute the Delta-V use of Stage 2
+% deltaV2 = norm(x0_iter_mark_init(4:6) - x0_iter_mark(4:6));
+% disp(['Total DV expended in Stage 2 = ' num2str(deltaV2)]);
 
 %% Generate legends and labels for the plot.
-legend_array = ["","",""];
-for n = 1:iter-1
-    legend_string = "Iteration " + num2str(n);
-    legend_array = [legend_array legend_string];
-end
-legend([legend_array]);
+% legend_array = ["","",""];
+% for n = 1:iter-1
+%     legend_string = "Iteration " + num2str(n);
+%     legend_array = [legend_array legend_string];
+% end
+% legend([legend_array]);
 xlabel('Saturn-Titan Synodic Frame X [km]');
 ylabel('Saturn-Titan Synodic Frame Y [km]');
 

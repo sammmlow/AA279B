@@ -89,7 +89,7 @@ EJS_C3(:,:,1) = -999; % Set all date combos as impossible until we find a flyby 
 EJS_C3(:,:,2) = 0;
 
 % Choose a tolerance for range of C3 values to test above the min C3 value
-C3tol = 170;
+C3tol = 200;
 
 % Choose the Earth departure - Saturn arrival that minimizes C3
 [minValue, minIdx] = min(depArr, [], 'all');
@@ -101,7 +101,7 @@ for j = 1:length(departureIdx)
     depIdx = departureIdx(j);
     arrIdx = arrivalIdx(j);
 
-    fprintf("Earth-Saturn C3 for this iteration is: %.4g \n", depArr(depIdx, arrIdx))
+    % fprintf("Earth-Saturn C3 for this iteration is: %.4g \n", depArr(depIdx, arrIdx))
 
     flybyDateIdx = findFlybyDates(departureIdx(j), arrivalIdx(j), depSwingby, swingbyArr, 0.01);
 
@@ -132,21 +132,21 @@ for j = 1:length(departureIdx)
                 flybyC3(end + 1) = norm(v_dep_e_eci)^2;
                 
     
-                tofJS = (sJD - jJD) * (24 * 3600);
-                rS = OE2HCI(6, sJD);
-                [vdep_hci, varr_hci, vdep_pl,varr_pl, vdep_norm, varr_norm, delta, e, rp]...
-                    = PlanetSwingby(muJ, rE(1:3), rJ(1:3), rS(1:3), tofEJ, tofJS, rJ(4:6));
+                % tofJS = (sJD - jJD) * (24 * 3600);
+                % rS = OE2HCI(6, sJD);
+                % [vdep_hci, varr_hci, vdep_pl,varr_pl, vdep_norm, varr_norm, delta, e, rp]...
+                %     = PlanetSwingby(muJ, rE(1:3), rJ(1:3), rS(1:3), tofEJ, tofJS, rJ(4:6));
 
 
-
-                fprintf(['Earth Departure Date: ' char(datestr(eJD - jdOffset)) '\n'])
-                fprintf(['Jupiter Swingby Date: ' char(datestr(jJD - jdOffset)) '\n'])
-                fprintf(['Saturn Arrival Date: ' char(datestr(sJD - jdOffset)) '\n'])
-                fprintf("Planetocentric arrival and departure speed: %.4g and %.4g km/s \n", varr_norm, vdep_norm);
-                fprintf("Radius of closest approach is: %.4g \n", rp);
-                fprintf("Required Earth-Saturn C3: %.4g km^2/s^2 \n", depArr(depIdx,arrIdx))
-                fprintf("Required Earth-Jupiter C3: %.4g km^2/s^2 \n", flybyC3(end))
-                fprintf("\n")
+                % 
+                % fprintf(['Earth Departure Date: ' char(datestr(eJD - jdOffset)) '\n'])
+                % fprintf(['Jupiter Swingby Date: ' char(datestr(jJD - jdOffset)) '\n'])
+                % fprintf(['Saturn Arrival Date: ' char(datestr(sJD - jdOffset)) '\n'])
+                % fprintf("Planetocentric arrival and departure speed: %.4g and %.4g km/s \n", varr_norm, vdep_norm);
+                % fprintf("Radius of closest approach is: %.4g \n", rp);
+                % fprintf("Required Earth-Saturn C3: %.4g km^2/s^2 \n", depArr(depIdx,arrIdx))
+                % fprintf("Required Earth-Jupiter C3: %.4g km^2/s^2 \n", flybyC3(end))
+                % fprintf("\n")
 
             else
                 continue
@@ -186,12 +186,13 @@ grid on;
 fontsize(gcf,18,"points")
 %% Find all dates corresponding to C3 values beneath a certain threshold:
 
-C3_threshold = 170;
+C3_threshold = 150;
 logicalMatrix = (EJS_C3(:,:,1) > 0) & (EJS_C3(:,:,1) < C3_threshold);
 [departureIdxAll, arrivalIdxAll] = find(logicalMatrix);
 % [departureIdxAll, arrivalIdxAll] = find(EJS_C3(EJS_C3(:,:,1) < C3_threshold & EJS_C3(:,:,1) > 0));
 
 SaturnArrivalAll = zeros(length(departureIdxAll), 7);
+DatesAll         = zeros(length(departureIdxAll), 3); %[eJD, jJD, sJD] 
 
 muJ     = 126686511;
 AU      = 149597870.7;
@@ -227,6 +228,7 @@ for k = 1:length(departureIdxAll)
                      tspanJS, initialJS, options);
 
     SaturnArrivalAll(k,:) = [sJD, State_JS(end,:)];
+    DatesAll(k,:)         = [eJD, jJD, sJD];
 
     
     % % Sanity Check (suppress this later)
@@ -270,7 +272,8 @@ fprintf(['Jupiter Swingby Date: ' char(datestr(jJD - jdOffset)) '\n'])
 fprintf(['Saturn Arrival Date: ' char(datestr(sJD - jdOffset)) '\n'])
 fprintf("Planetocentric arrival and departure speed: %.4g and %.4g km/s \n", varr_norm, vdep_norm);
 fprintf("Radius of closest approach is: %.4g \n", rp);
-fprintf("Required C3: %.4g km^2/s^2 \n", EJS_C3(departureIdx,arrivalIdx,1))
+fprintf("Required Earth-Jupiter C3: %.4g km^2/s^2 \n", EJS_C3(departureIdx,arrivalIdx,1))
+fprintf("Required Earth-Saturn C3 for same date: %.4g km^2/s^2 \n", depArr(departureIdx, arrivalIdx));
 
 %% Plot trajectory:
 

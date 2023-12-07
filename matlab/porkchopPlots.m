@@ -1,4 +1,4 @@
-function [depArrC3, depSwingbyVminus, swingbyArrVplus] = porkchopPlots(depDates,...
+function [depArrC3, depSwingbyVminus, swingbyArrVplus, depSwingbyC3] = porkchopPlots(depDates,...
     arrDates, swingbyDates, depPlanetID, swingbyPlanetID, arrPlanetID)
 
     % Constants:
@@ -11,6 +11,7 @@ function [depArrC3, depSwingbyVminus, swingbyArrVplus] = porkchopPlots(depDates,
     depArrC3         = zeros(nD, nA);
     depSwingbyVminus = zeros(nD, nS);
     swingbyArrVplus  = zeros(nS, nA);
+    depSwingbyC3     = zeros(nD, nS);
     
     %%%%%%%%%%%%% DEPARTURE - ARRIVAL: C3 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     for i = 1:nD
@@ -28,6 +29,27 @@ function [depArrC3, depSwingbyVminus, swingbyArrVplus] = porkchopPlots(depDates,
             v_dep_e_heli  = vdep - rDep(4:6);
             v_dep_e_eci   = rotx(23.45) * v_dep_e_heli;
             depArrC3(i,j) = norm(v_dep_e_eci)^2;
+    
+        end
+
+    end
+
+    %%%%%%%%%%%%% DEPARTURE - SWINGBY: C3 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    for i = 1:nD
+
+        rDep = OE2HCI(depPlanetID, depDates(i));
+
+        for j = 1:nS
+    
+            rSwing = OE2HCI(swingbyPlanetID, swingbyDates(j));
+            tof    = (swingbyDates(j) - depDates(i)) * (24*3600); % seconds
+    
+            [vdep,~,~] = AA279lambert_curtis(muSun, rDep(1:3), rSwing(1:3), 'pro', 0, tof);
+    
+            % C3:
+            v_dep_e_heli  = vdep - rDep(4:6);
+            v_dep_e_eci   = rotx(23.45) * v_dep_e_heli;
+            depSwingbyC3(i,j) = norm(v_dep_e_eci)^2;
     
         end
 
